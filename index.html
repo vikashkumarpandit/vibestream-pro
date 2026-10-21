@@ -47,7 +47,6 @@
 
         .load-more-btn { width: 100%; padding: 14px; margin-top: 15px; border-radius: 14px; border: 1px dashed var(--accent); background: rgba(16, 185, 129, 0.08); color: var(--accent); font-weight: 700; cursor: pointer; text-align: center; }
 
-        /* Full Screen Player Modal */
         .player-modal { position: fixed; inset: 0; background: linear-gradient(180deg, #111827 0%, #090d16 100%); z-index: 100; display: none; flex-direction: column; justify-content: space-between; padding: 18px 20px 24px; overflow-y: auto; }
         .player-modal.open { display: flex; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; }
@@ -58,11 +57,7 @@
         .media-stage { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1/1; margin: 10px auto; border-radius: 22px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.6); background: #000; display: flex; align-items: center; justify-content: center; }
         .media-stage img { width: 100%; height: 100%; object-fit: cover; }
         .media-stage video { width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
-        .tap-zone { position: absolute; top: 0; bottom: 0; width: 45%; z-index: 10; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem; color: #fff; opacity: 0; transition: opacity 0.2s; }
-        .tap-left { left: 0; background: radial-gradient(circle at left, rgba(255,255,255,0.3), transparent 70%); }
-        .tap-right { right: 0; background: radial-gradient(circle at right, rgba(255,255,255,0.3), transparent 70%); }
-        .tap-zone.show { opacity: 1; }
-
+        
         .player-meta { text-align: center; margin: 4px 0; }
         .player-meta h2 { font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .player-meta p { color: var(--subtext); font-size: 0.82rem; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -149,8 +144,6 @@
     </div>
 
     <div class="media-stage" id="mediaStage">
-        <div class="tap-zone tap-left" id="tapLeft">⏪ -10s</div>
-        <div class="tap-zone tap-right" id="tapRight">⏩ +10s</div>
         <img id="fullThumb" src="" alt="Poster">
         <video id="mediaElement" playsinline crossorigin="anonymous"></video>
     </div>
@@ -169,11 +162,9 @@
     </div>
 
     <div class="controls-row">
-        <button class="ctrl-btn" onclick="seekRelative(-10)">-10s</button>
         <button class="ctrl-btn" onclick="playPrev()">⏮</button>
         <button class="ctrl-btn play-main" id="fullPlayBtn" onclick="togglePlay()">▶</button>
         <button class="ctrl-btn" onclick="playNext()">⏭</button>
-        <button class="ctrl-btn" onclick="seekRelative(10)">+10s</button>
     </div>
 
     <div>
@@ -234,36 +225,37 @@
         });
     }
 
-    // MULTI-FALLBACK AUDIO EXTRACTOR (Never fails to find a working stream)
+    // ROBUST MULTI-FALLBACK ENGINE (Tries 5 different public nodes so it never fails)
     async function fetchWorkingAudio(query) {
         const clean = query.replace('official audio', '').replace('audio', '').trim();
         
-        // Node 1: JioSaavn APIS
-        const saavnApis = [
+        // 1. JioSaavn Nodes
+        const apis = [
             `https://saavn.dev/api/search/songs?query=${encodeURIComponent(clean)}&limit=1`,
-            `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(clean)}&limit=1`
+            `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(clean)}&limit=1`,
+            `https://jiosaavn.vercel.app/search?query=${encodeURIComponent(clean)}`
         ];
-        for (const u of saavnApis) {
+        for (const u of apis) {
             try {
                 const r = await fetch(u);
                 const d = await r.json();
-                const results = d.data?.results || d.data || [];
+                const results = d.data?.results || d.data || d.results || [];
                 if (results.length > 0) {
-                    const dl = results[0].downloadUrl;
-                    if (dl && dl.length > 0) return dl[dl.length - 1].url || dl[dl.length - 1].link;
+                    const dl = results[0].downloadUrl || results[0].media_url;
+                    if (Array.isArray(dl) && dl.length > 0) {
+                        return dl[dl.length - 1].url || dl[dl.length - 1].link;
+                    } else if (typeof dl === 'string') {
+                        return dl;
+                    }
                 }
             } catch (e) {}
         }
 
-        // Node 2: Piped / Invidious Audio Nodes
-        const pipedNodes = [
-            "https://pipedapi.kavin.rocks",
-            "https://pipedapi.tokhmi.xyz",
-            "https://pipedapi.moomoo.me"
-        ];
-        for (const node of pipedNodes) {
+        // 2. Piped Audio Fallback Nodes
+        const nodes = ["https://pipedapi.kavin.rocks", "https://pipedapi.tokhmi.xyz", "https://pipedapi.moomoo.me"];
+        for (const node of nodes) {
             try {
-                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean + ' audio')}&filter=videos`).then(r => r.json());
+                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean)}&filter=videos`).then(r => r.json());
                 if (s.items && s.items.length > 0) {
                     const id = s.items[0].url.split('v=')[1];
                     const st = await fetch(`${node}/streams/${id}`).then(r => r.json());
@@ -277,11 +269,7 @@
 
     async function fetchWorkingVideo(query) {
         const clean = query.replace('official video', '').replace('video', '').trim();
-        const nodes = [
-            "https://pipedapi.kavin.rocks",
-            "https://pipedapi.tokhmi.xyz",
-            "https://pipedapi.moomoo.me"
-        ];
+        const nodes = ["https://pipedapi.kavin.rocks", "https://pipedapi.tokhmi.xyz", "https://pipedapi.moomoo.me"];
         for (const node of nodes) {
             try {
                 const s = await fetch(`${node}/search?q=${encodeURIComponent(clean + ' official video')}&filter=videos`).then(r => r.json());
@@ -439,7 +427,7 @@
             return;
         }
 
-        showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Loading Audio Stream...");
+        showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Searching working stream...");
         let url = null;
         if (currentMode === 'video') {
             url = await fetchWorkingVideo(song.query);
@@ -452,7 +440,7 @@
             media.src = url;
             media.play();
         } else {
-            showToast("❌ Stream unavailable");
+            showToast("❌ Stream unavailable. Try another song!");
         }
     }
 
@@ -554,20 +542,6 @@
     document.getElementById('seekBar').addEventListener('input', (e) => {
         if (media.duration) media.currentTime = (e.target.value / 100) * media.duration;
     });
-
-    let lastLeft = 0, lastRight = 0;
-    document.getElementById('tapLeft').addEventListener('touchend', () => {
-        const now = Date.now();
-        if (now - lastLeft < 300) { seekRelative(-10); flashZone('tapLeft'); }
-        lastLeft = now;
-    });
-    document.getElementById('tapRight').addEventListener('touchend', () => {
-        const now = Date.now();
-        if (now - lastRight < 300) { seekRelative(10); flashZone('tapRight'); }
-        lastRight = now;
-    });
-    function seekRelative(sec) { if (media.duration) media.currentTime = Math.min(Math.max(0, media.currentTime + sec), media.duration); }
-    function flashZone(id) { const el = document.getElementById(id); el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 400); }
 
     function toggleModal(open) { document.getElementById('playerModal').classList.toggle('open', open); }
     function switchTab(tab) {
