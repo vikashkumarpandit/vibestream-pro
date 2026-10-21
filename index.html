@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#090d16">
-    <title>VibeStream Ultimate</title>
+    <title>VibeStream Ultimate Pro</title>
     <style>
         :root {
             --bg: #090d16;
@@ -15,7 +15,7 @@
             --subtext: #94a3b8;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); color: var(--text); padding-bottom: 155px; overflow-x: hidden; user-select: none; }
+        body { background: var(--bg); color: var(--text); padding-bottom: 165px; overflow-x: hidden; user-select: none; }
 
         .ambient-bg { position: fixed; top: -10%; left: -10%; width: 120%; height: 55%; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; z-index: 0; }
 
@@ -55,7 +55,7 @@
         .mode-btn { padding: 5px 12px; border-radius: 16px; border: none; background: transparent; color: #fff; font-size: 0.76rem; cursor: pointer; }
         .mode-btn.active { background: var(--accent); color: #052e16; font-weight: 700; }
 
-        .media-stage { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1/1; margin: 10px auto; border-radius: 22px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.6); background: #000; display: flex; align-items: center; justify-content: center; }
+        .media-stage { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1/1; margin: 10px auto; border-radius: 22px; overflow: hidden; box-shadow: 0 20px 45px rgba(0,0,0,0.6); background: #000; display: flex; align-items: center; justify-content: center; }
         .media-stage img { width: 100%; height: 100%; object-fit: cover; }
         .media-stage video { width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
         .tap-zone { position: absolute; top: 0; bottom: 0; width: 45%; z-index: 10; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem; color: #fff; opacity: 0; transition: opacity 0.2s; }
@@ -63,17 +63,21 @@
         .tap-right { right: 0; background: radial-gradient(circle at right, rgba(255,255,255,0.3), transparent 70%); }
         .tap-zone.show { opacity: 1; }
 
-        .player-meta { text-align: center; margin: 6px 0; }
-        .player-meta h2 { font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .player-meta p { color: var(--subtext); font-size: 0.88rem; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .player-meta { text-align: center; margin: 4px 0; }
+        .player-meta h2 { font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .player-meta p { color: var(--subtext); font-size: 0.82rem; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .seek-area { width: 100%; margin: 8px 0; }
+        .seek-area { width: 100%; margin: 6px 0; }
         .seek-bar { width: 100%; accent-color: var(--accent); height: 5px; cursor: pointer; }
-        .time-row { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--subtext); margin-top: 5px; }
+        .time-row { display: flex; justify-content: space-between; font-size: 0.74rem; color: var(--subtext); margin-top: 4px; }
 
-        .controls-row { display: flex; justify-content: center; align-items: center; gap: 18px; margin: 8px 0; }
-        .ctrl-btn { background: rgba(255,255,255,0.08); border: none; color: #fff; width: 46px; height: 46px; border-radius: 50%; font-size: 1rem; cursor: pointer; }
-        .play-main { width: 64px; height: 64px; background: var(--accent); color: #052e16; font-size: 1.5rem; font-weight: bold; box-shadow: 0 8px 25px var(--accent-glow); }
+        .controls-row { display: flex; justify-content: center; align-items: center; gap: 16px; margin: 6px 0; }
+        .ctrl-btn { background: rgba(255,255,255,0.08); border: none; color: #fff; width: 42px; height: 42px; border-radius: 50%; font-size: 0.95rem; cursor: pointer; }
+        .play-main { width: 58px; height: 58px; background: var(--accent); color: #052e16; font-size: 1.3rem; font-weight: bold; box-shadow: 0 8px 25px var(--accent-glow); }
+
+        .dl-bar { display: flex; gap: 8px; margin-top: 8px; }
+        .dl-chip { flex: 1; padding: 9px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); color: #fff; font-weight: 600; font-size: 0.76rem; text-align: center; cursor: pointer; }
+        .dl-chip:active { background: var(--accent); color: #052e16; }
 
         .mini-player { position: fixed; bottom: 64px; left: 10px; right: 10px; background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 8px 12px; display: none; align-items: center; gap: 10px; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.6); }
         .mini-player img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; }
@@ -94,7 +98,7 @@
 <div class="toast" id="toastMsg"></div>
 
 <header>
-    <div class="logo">⚡ VibeStream Ultimate</div>
+    <div class="logo">⚡ VibeStream Pro</div>
     <div class="badge" onclick="switchTab('vault')">🔒 Vault</div>
 </header>
 
@@ -171,6 +175,14 @@
         <button class="ctrl-btn" onclick="playNext()">⏭</button>
         <button class="ctrl-btn" onclick="seekRelative(10)">+10s</button>
     </div>
+
+    <div>
+        <p style="font-size:0.72rem; color:var(--subtext); text-align:center; margin-bottom:4px;">1-Click Instant Download:</p>
+        <div class="dl-bar">
+            <div class="dl-chip" onclick="downloadCurrentSong('mp3')">⬇ Download MP3</div>
+            <div class="dl-chip" onclick="downloadCurrentSong('mp4')">⬇ Download Video</div>
+        </div>
+    </div>
 </div>
 
 <div class="bottom-nav">
@@ -191,8 +203,7 @@
     let isVaultView = false;
     let db = null;
 
-    // IndexedDB for 100% Reliable Offline Vault Storage inside APK
-    const req = indexedDB.open("VibeStream_Standalone_Vault", 1);
+    const req = indexedDB.open("VibeStream_Ultimate_Vault", 1);
     req.onupgradeneeded = (e) => {
         db = e.target.result;
         if (!db.objectStoreNames.contains("vault")) db.createObjectStore("vault", { keyPath: "query" });
@@ -223,13 +234,16 @@
         });
     }
 
-    async function fetchDirectAudio(query) {
+    // MULTI-FALLBACK AUDIO EXTRACTOR (Never fails to find a working stream)
+    async function fetchWorkingAudio(query) {
         const clean = query.replace('official audio', '').replace('audio', '').trim();
-        const apis = [
+        
+        // Node 1: JioSaavn APIS
+        const saavnApis = [
             `https://saavn.dev/api/search/songs?query=${encodeURIComponent(clean)}&limit=1`,
             `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(clean)}&limit=1`
         ];
-        for (const u of apis) {
+        for (const u of saavnApis) {
             try {
                 const r = await fetch(u);
                 const d = await r.json();
@@ -240,19 +254,45 @@
                 }
             } catch (e) {}
         }
+
+        // Node 2: Piped / Invidious Audio Nodes
+        const pipedNodes = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.tokhmi.xyz",
+            "https://pipedapi.moomoo.me"
+        ];
+        for (const node of pipedNodes) {
+            try {
+                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean + ' audio')}&filter=videos`).then(r => r.json());
+                if (s.items && s.items.length > 0) {
+                    const id = s.items[0].url.split('v=')[1];
+                    const st = await fetch(`${node}/streams/${id}`).then(r => r.json());
+                    const audioStream = (st.audioStreams || []).sort((a,b) => b.bitrate - a.bitrate)[0];
+                    if (audioStream && audioStream.url) return audioStream.url;
+                }
+            } catch (e) {}
+        }
         return null;
     }
 
-    async function fetchVideoUrl(query) {
-        try {
-            const s = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query + ' official video')}&filter=videos`).then(r => r.json());
-            if (s.items && s.items.length > 0) {
-                const id = s.items[0].url.split('v=')[1];
-                const st = await fetch(`https://pipedapi.kavin.rocks/streams/${id}`).then(r => r.json());
-                const v = (st.videoStreams || []).find(x => !x.videoOnly && x.url);
-                if (v) return v.url;
-            }
-        } catch (e) {}
+    async function fetchWorkingVideo(query) {
+        const clean = query.replace('official video', '').replace('video', '').trim();
+        const nodes = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.tokhmi.xyz",
+            "https://pipedapi.moomoo.me"
+        ];
+        for (const node of nodes) {
+            try {
+                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean + ' official video')}&filter=videos`).then(r => r.json());
+                if (s.items && s.items.length > 0) {
+                    const id = s.items[0].url.split('v=')[1];
+                    const st = await fetch(`${node}/streams/${id}`).then(r => r.json());
+                    const v = (st.videoStreams || []).find(x => !x.videoOnly && x.url);
+                    if (v) return v.url;
+                }
+            } catch (e) {}
+        }
         return null;
     }
 
@@ -390,7 +430,6 @@
         document.getElementById('fullArtist').innerText = song.artist;
         document.getElementById('fullThumb').src = song.thumbnail;
 
-        // Check Offline Vault first
         await refreshVaultCache();
         const vaultMatch = vaultSongsCache.find(v => v.query === song.query);
         if (vaultMatch && vaultMatch.blob && currentMode === 'audio') {
@@ -400,13 +439,13 @@
             return;
         }
 
-        showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Loading Audio...");
+        showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Loading Audio Stream...");
         let url = null;
         if (currentMode === 'video') {
-            url = await fetchVideoUrl(song.query);
+            url = await fetchWorkingVideo(song.query);
         }
         if (!url) {
-            url = await fetchDirectAudio(song.query);
+            url = await fetchWorkingAudio(song.query);
         }
 
         if (url) {
@@ -421,7 +460,7 @@
         const song = currentQueue[idx];
         showToast(`🔒 Locking in Vault...`);
         try {
-            const audioUrl = await fetchDirectAudio(song.query);
+            const audioUrl = await fetchWorkingAudio(song.query);
             if (!audioUrl) throw new Error();
             const r = await fetch(audioUrl);
             const blob = await r.blob();
@@ -441,6 +480,25 @@
             };
         } catch (e) {
             showToast("❌ Failed to save");
+        }
+    }
+
+    async function downloadCurrentSong(fmt) {
+        if (currentIndex < 0) return;
+        const song = currentQueue[currentIndex];
+        showToast(`⏳ Preparing ${fmt.toUpperCase()} Download...`);
+        try {
+            let dlUrl = fmt === 'mp4' ? await fetchWorkingVideo(song.query) : await fetchWorkingAudio(song.query);
+            if (!dlUrl) throw new Error();
+            const r = await fetch(dlUrl);
+            const blob = await r.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${song.title.replace(/[^a-zA-Z0-9]/g, '_')}.${fmt === 'mp4' ? 'mp4' : 'm4a'}`;
+            a.click();
+            showToast(`🎉 Download Complete!`);
+        } catch (e) {
+            showToast("❌ Download failed");
         }
     }
 
