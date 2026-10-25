@@ -26,8 +26,8 @@ jobs:
       - name: Setup Capacitor Project
         run: |
           mkdir -p www
-          if [ -f index.html ]; then cp index.html www/index.html; fi
-          cat << 'EOF' > package.json
+          cp index.html www/index.html
+          cat << 'EOT' > package.json
           {
             "name": "vibestream",
             "version": "1.0.0",
@@ -37,8 +37,8 @@ jobs:
               "@capacitor/core": "^5.0.0"
             }
           }
-          EOF
-          cat << 'EOF' > capacitor.config.json
+          EOT
+          cat << 'EOT' > capacitor.config.json
           {
             "appId": "com.vikas.vibestream",
             "appName": "VibeStream Pro",
@@ -47,9 +47,12 @@ jobs:
             "server": {
               "androidScheme": "https",
               "cleartext": true
+            },
+            "plugins": {
+              "CapacitorHttp": { "enabled": true }
             }
           }
-          EOF
+          EOT
           npm install
           npx cap add android
           npx cap sync android
