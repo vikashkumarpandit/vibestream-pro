@@ -145,7 +145,7 @@
 
     <div class="media-stage" id="mediaStage">
         <img id="fullThumb" src="" alt="Poster">
-        <video id="mediaElement" playsinline crossorigin="anonymous"></video>
+        <video id="mediaElement" playsinline webkit-playsinline></video>
     </div>
 
     <div class="player-meta">
@@ -225,64 +225,62 @@
         });
     }
 
-    // ROBUST MULTI-FALLBACK ENGINE (Tries 5 different public nodes so it never fails)
-    async function fetchWorkingAudio(query) {
+    // ROBUST MULTI-FALLBACK ENGINE: collects candidate URLs from every node in parallel,
+    // then playTrack() tries them one by one until one ACTUALLY starts playing.
+    const SAAVN_APIS = ["https://saavn.dev/api/search/songs?query=", "https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query="];
+    const PIPED_NODES = ["https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de", "https://api.piped.private.coffee", "https://pipedapi.leptons.xyz"];
+    const tf = (u, ms = 7000) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return fetch(u, { signal: c.signal }).finally(() => clearTimeout(t)); };
+    const uniq = a => [...new Set(a.filter(Boolean))];
+
+    async function saavnUrls(base, q) {
+        const d = await (await tf(base + encodeURIComponent(q) + '&limit=1')).json();
+        const r = (d.data?.results || d.data || d.results || [])[0];
+        const dl = r?.downloadUrl || r?.media_url;
+        if (Array.isArray(dl)) return dl.map(x => x.url || x.link).reverse().slice(0, 2);
+        return typeof dl === 'string' ? [dl] : [];
+    }
+    async function pipedUrls(node, q, video) {
+        const s = await (await tf(`${node}/search?q=${encodeURIComponent(video ? q + ' official video' : q + ' audio')}&filter=videos`)).json();
+        const id = s.items?.[0]?.url?.split('v=')[1];
+        if (!id) return [];
+        const st = await (await tf(`${node}/streams/${id}`)).json();
+        if (video) return (st.videoStreams || []).filter(x => !x.videoOnly && x.url).map(x => x.url).slice(0, 2);
+        return (st.audioStreams || []).sort((a, b) => b.bitrate - a.bitrate).map(x => x.url).slice(0, 2);
+    }
+    async function previewUrl(q) {
+        const d = await (await tf('https://itunes.apple.com/search?media=music&limit=1&term=' + encodeURIComponent(q))).json();
+        return d.results?.[0]?.previewUrl ? [d.results[0].previewUrl] : [];
+    }
+    async function getAudioCandidates(query) {
         const clean = query.replace('official audio', '').replace('audio', '').trim();
-        
-        // 1. JioSaavn Nodes
-        const apis = [
-            `https://saavn.dev/api/search/songs?query=${encodeURIComponent(clean)}&limit=1`,
-            `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(clean)}&limit=1`,
-            `https://jiosaavn.vercel.app/search?query=${encodeURIComponent(clean)}`
-        ];
-        for (const u of apis) {
-            try {
-                const r = await fetch(u);
-                const d = await r.json();
-                const results = d.data?.results || d.data || d.results || [];
-                if (results.length > 0) {
-                    const dl = results[0].downloadUrl || results[0].media_url;
-                    if (Array.isArray(dl) && dl.length > 0) {
-                        return dl[dl.length - 1].url || dl[dl.length - 1].link;
-                    } else if (typeof dl === 'string') {
-                        return dl;
-                    }
-                }
-            } catch (e) {}
-        }
-
-        // 2. Piped Audio Fallback Nodes
-        const nodes = ["https://pipedapi.kavin.rocks", "https://pipedapi.tokhmi.xyz", "https://pipedapi.moomoo.me"];
-        for (const node of nodes) {
-            try {
-                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean)}&filter=videos`).then(r => r.json());
-                if (s.items && s.items.length > 0) {
-                    const id = s.items[0].url.split('v=')[1];
-                    const st = await fetch(`${node}/streams/${id}`).then(r => r.json());
-                    const audioStream = (st.audioStreams || []).sort((a,b) => b.bitrate - a.bitrate)[0];
-                    if (audioStream && audioStream.url) return audioStream.url;
-                }
-            } catch (e) {}
-        }
-        return null;
+        const g = await Promise.all([
+            ...SAAVN_APIS.map(b => saavnUrls(b, clean).catch(() => [])),
+            ...PIPED_NODES.map(n => pipedUrls(n, clean, false).catch(() => []))
+        ]);
+        const pv = await previewUrl(clean).catch(() => []);   // guaranteed last resort (30s)
+        return uniq([...g.flat(), ...pv]);
     }
-
-    async function fetchWorkingVideo(query) {
+    async function getVideoCandidates(query) {
         const clean = query.replace('official video', '').replace('video', '').trim();
-        const nodes = ["https://pipedapi.kavin.rocks", "https://pipedapi.tokhmi.xyz", "https://pipedapi.moomoo.me"];
-        for (const node of nodes) {
-            try {
-                const s = await fetch(`${node}/search?q=${encodeURIComponent(clean + ' official video')}&filter=videos`).then(r => r.json());
-                if (s.items && s.items.length > 0) {
-                    const id = s.items[0].url.split('v=')[1];
-                    const st = await fetch(`${node}/streams/${id}`).then(r => r.json());
-                    const v = (st.videoStreams || []).find(x => !x.videoOnly && x.url);
-                    if (v) return v.url;
-                }
-            } catch (e) {}
-        }
-        return null;
+        const g = await Promise.all(PIPED_NODES.map(n => pipedUrls(n, clean, true).catch(() => [])));
+        return uniq(g.flat());
     }
+    async function fetchWorkingAudio(q) { return (await getAudioCandidates(q))[0] || null; }
+    async function fetchWorkingVideo(q) { return (await getVideoCandidates(q))[0] || null; }
+
+    // Resolves only when the media element really reaches "playing"
+    function tryPlay(url) {
+        return new Promise((ok, no) => {
+            let done = false;
+            const fin = f => { if (done) return; done = true; clearTimeout(t); media.removeEventListener('error', er); media.removeEventListener('playing', pl); f(); };
+            const er = () => fin(no), pl = () => fin(ok);
+            const t = setTimeout(() => fin(no), 10000);
+            media.addEventListener('error', er); media.addEventListener('playing', pl);
+            media.src = url; media.load();
+            const p = media.play(); if (p && p.catch) p.catch(() => {});
+        });
+    }
+    let playToken = 0;
 
     async function loadTrending() {
         isVaultView = false;
@@ -427,21 +425,18 @@
             return;
         }
 
+        const token = ++playToken;
         showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Searching working stream...");
-        let url = null;
-        if (currentMode === 'video') {
-            url = await fetchWorkingVideo(song.query);
+        let cands = [];
+        if (currentMode === 'video') cands = await getVideoCandidates(song.query);
+        if (token !== playToken) return;
+        const audioC = await getAudioCandidates(song.query);
+        cands = [...cands, ...audioC];
+        for (const url of cands) {
+            if (token !== playToken) return;
+            try { await tryPlay(url); return; } catch (e) {}
         }
-        if (!url) {
-            url = await fetchWorkingAudio(song.query);
-        }
-
-        if (url) {
-            media.src = url;
-            media.play();
-        } else {
-            showToast("❌ Stream unavailable. Try another song!");
-        }
+        if (token === playToken) showToast("❌ Stream unavailable. Try another song!");
     }
 
     async function quickSaveToVault(idx) {
@@ -557,4 +552,11 @@
     window.onload = loadTrending;
 </script>
 </body>
+</html>
+<html>
+
+</html><html>
+
+</html><html>
+
 </html>
