@@ -104,6 +104,7 @@
     </div>
 
     <div class="vibe-chips" id="vibeChipsBar">
+        <div class="chip" onclick="loadFree('', this)">🆓 Free Full Songs</div>
         <div class="chip active" onclick="loadVibe('Trending India', this)">🔥 Top 100 Trending</div>
         <div class="chip" onclick="loadVibe('Arijit Singh Hits', this)">❤️ Arijit Unlimited</div>
         <div class="chip" onclick="loadVibe('Bollywood Lofi Chill', this)">🌙 Late Night Lofi</div>
@@ -227,8 +228,9 @@
 
     // ROBUST MULTI-FALLBACK ENGINE: collects candidate URLs from every node in parallel,
     // then playTrack() tries them one by one until one ACTUALLY starts playing.
-    const SAAVN_APIS = ["https://saavn.dev/api/search/songs?query=", "https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query="];
-    const PIPED_NODES = ["https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de", "https://api.piped.private.coffee", "https://pipedapi.leptons.xyz"];
+    const _ls=k=>{try{return JSON.parse(localStorage.getItem(k)||"[]")}catch(e){return[]}};
+    const SAAVN_APIS = [..._ls("vw_saavn"), "https://saavn.dev/api/search/songs?query=", "https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query="];
+    const PIPED_NODES = [..._ls("vw_piped"), "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de", "https://api.piped.private.coffee", "https://pipedapi.leptons.xyz"];
     const tf = (u, ms = 7000) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return fetch(u, { signal: c.signal }).finally(() => clearTimeout(t)); };
     const uniq = a => [...new Set(a.filter(Boolean))];
 
@@ -251,13 +253,15 @@
         const d = await (await tf('https://itunes.apple.com/search?media=music&limit=1&term=' + encodeURIComponent(q))).json();
         return d.results?.[0]?.previewUrl ? [d.results[0].previewUrl] : [];
     }
-    async function getAudioCandidates(query) {
+    let previewSet = new Set();
+    async function getAudioCandidates(query, fullOnly = false) {
         const clean = query.replace('official audio', '').replace('audio', '').trim();
         const g = await Promise.all([
             ...SAAVN_APIS.map(b => saavnUrls(b, clean).catch(() => [])),
             ...PIPED_NODES.map(n => pipedUrls(n, clean, false).catch(() => []))
         ]);
-        const pv = await previewUrl(clean).catch(() => []);   // guaranteed last resort (30s)
+        const pv = fullOnly ? [] : await previewUrl(clean).catch(() => []);   // last resort (30s)
+        pv.forEach(u => previewSet.add(u));
         return uniq([...g.flat(), ...pv]);
     }
     async function getVideoCandidates(query) {
@@ -265,7 +269,7 @@
         const g = await Promise.all(PIPED_NODES.map(n => pipedUrls(n, clean, true).catch(() => [])));
         return uniq(g.flat());
     }
-    async function fetchWorkingAudio(q) { return (await getAudioCandidates(q))[0] || null; }
+    async function fetchWorkingAudio(q) { return (await getAudioCandidates(q, true))[0] || null; }
     async function fetchWorkingVideo(q) { return (await getVideoCandidates(q))[0] || null; }
 
     // Resolves only when the media element really reaches "playing"
@@ -425,6 +429,12 @@
             return;
         }
 
+        if (song.url) {
+            const tk = ++playToken;
+            showToast(currentMode === 'video' ? "ℹ️ Is song ka video nahi hai, audio chal raha hai" : "⏳ Loading full song...");
+            try { await tryPlay(song.url); } catch (e) { if (tk === playToken) showToast("❌ Stream fail — dusra song try karo"); }
+            return;
+        }
         const token = ++playToken;
         showToast(currentMode === 'video' ? "🎬 Loading Video..." : "⏳ Searching working stream...");
         let cands = [];
@@ -434,7 +444,7 @@
         cands = [...cands, ...audioC];
         for (const url of cands) {
             if (token !== playToken) return;
-            try { await tryPlay(url); return; } catch (e) {}
+            try { await tryPlay(url); if (previewSet.has(url)) showToast("⚠️ Sirf 30s preview — full-song nodes down hain (⚙ se node badlo)"); return; } catch (e) {}
         }
         if (token === playToken) showToast("❌ Stream unavailable. Try another song!");
     }
@@ -443,7 +453,7 @@
         const song = currentQueue[idx];
         showToast(`🔒 Locking in Vault...`);
         try {
-            const audioUrl = await fetchWorkingAudio(song.query);
+            const audioUrl = song.url || await fetchWorkingAudio(song.query);
             if (!audioUrl) throw new Error();
             const r = await fetch(audioUrl);
             const blob = await r.blob();
@@ -466,22 +476,30 @@
         }
     }
 
+    const blobToB64 = b => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result.split(',')[1]); r.onerror = no; r.readAsDataURL(b); });
     async function downloadCurrentSong(fmt) {
         if (currentIndex < 0) return;
         const song = currentQueue[currentIndex];
         showToast(`⏳ Preparing ${fmt.toUpperCase()} Download...`);
         try {
-            let dlUrl = fmt === 'mp4' ? await fetchWorkingVideo(song.query) : await fetchWorkingAudio(song.query);
-            if (!dlUrl) throw new Error();
+            if (song.url && fmt === 'mp4') { showToast('ℹ️ Is song ka video nahi hai, MP3 download karo'); return; }
+            let dlUrl = song.url ? song.url : fmt === 'mp4' ? await fetchWorkingVideo(song.query) : await fetchWorkingAudio(song.query);
+            if (!dlUrl) { showToast("❌ Full file nahi mili — saare nodes down hain (⚙ se naya node daalo)"); return; }
             const r = await fetch(dlUrl);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
             const blob = await r.blob();
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `${song.title.replace(/[^a-zA-Z0-9]/g, '_')}.${fmt === 'mp4' ? 'mp4' : 'm4a'}`;
-            a.click();
-            showToast(`🎉 Download Complete!`);
+            const name = `${song.title.replace(/[^a-zA-Z0-9]/g, '_')}.${fmt === 'mp4' ? 'mp4' : (blob.type.includes('mpeg') ? 'mp3' : 'm4a')}`;
+            const FS = window.Capacitor?.Plugins?.Filesystem;
+            if (FS) {
+                await FS.writeFile({ path: 'VibeStream/' + name, data: await blobToB64(blob), directory: 'DOCUMENTS', recursive: true });
+                showToast('🎉 Saved: Documents/VibeStream/' + name);
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+                showToast('🎉 Download Complete!');
+            }
         } catch (e) {
-            showToast("❌ Download failed");
+            showToast("❌ Download failed: " + (e.message || 'blocked'));
         }
     }
 
@@ -550,6 +568,95 @@
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
     window.onload = loadTrending;
+
+
+    // ===== FREE & LEGAL FULL SONGS: Audius (no key) + Jamendo (free client_id via ⚙) =====
+    let freeMode = false;
+    const escH = t => String(t || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const NOTE = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#1b2233"/><text x="150" y="190" font-size="140" text-anchor="middle">🎵</text></svg>');
+    const AUDIUS = ["https://api.audius.co", "https://discoveryprovider.audius.co"];
+    const jamId = () => localStorage.getItem('vw_jamendo') || '';
+    async function audiusFetch(path) {
+        for (const h of AUDIUS) { try { const r = await tf(h + path + (path.includes('?') ? '&' : '?') + 'app_name=VibeWave', 8000); if (r.ok) return { host: h, data: (await r.json()).data || [] }; } catch (e) {} }
+        return { host: AUDIUS[0], data: [] };
+    }
+    async function audiusTracks(q) {
+        const { host, data } = await audiusFetch(q ? `/v1/tracks/search?limit=40&query=${encodeURIComponent(q)}` : '/v1/tracks/trending?limit=50');
+        return data.filter(t => t.id).map(t => ({
+            title: escH(t.title), artist: escH(t.user?.name), query: 'free:audius:' + t.id,
+            thumbnail: t.artwork?.['480x480'] || t.artwork?.['150x150'] || NOTE,
+            url: `${host}/v1/tracks/${t.id}/stream?app_name=VibeWave`
+        }));
+    }
+    async function jamendoTracks(q) {
+        if (!jamId()) return [];
+        try {
+            const u = `https://api.jamendo.com/v3.0/tracks/?client_id=${jamId()}&format=json&limit=40&audioformat=mp32&` + (q ? 'namesearch=' + encodeURIComponent(q) : 'order=popularity_week');
+            const d = await (await tf(u, 8000)).json();
+            return (d.results || []).map(t => ({ title: escH(t.name), artist: escH(t.artist_name), query: 'free:jamendo:' + t.id, thumbnail: t.image || NOTE, url: t.audio }));
+        } catch (e) { return []; }
+    }
+    async function loadFree(q, chipEl) {
+        freeMode = true; isVaultView = false;
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        if (chipEl) chipEl.classList.add('active');
+        document.getElementById('loadMoreBtn').style.display = 'none';
+        document.getElementById('listHeading').innerText = q ? `🆓 Free: ${q}` : '🆓 Free Full Songs (Audius + Jamendo)';
+        showToast('⏳ Loading free songs...');
+        await refreshVaultCache();
+        const [a, j] = await Promise.all([audiusTracks(q), jamendoTracks(q)]);
+        currentQueue = [...a, ...j];
+        renderSongList(currentQueue, false);
+        if (!currentQueue.length) showToast('❌ Kuch nahi mila — internet check karo ya dusra naam search karo');
+    }
+    const _search = searchMusic;
+    searchMusic = async function () {
+        const q = document.getElementById('searchInput').value.trim();
+        if (freeMode && q) return loadFree(q);
+        return _search();
+    };
+    const _lt = loadTrending; loadTrending = function () { freeMode = false; return _lt(); };
+    const _lv = loadVibe; loadVibe = function (a, b) { freeMode = false; return _lv(a, b); };
+    const _lvs = loadVaultSongs; loadVaultSongs = function () { freeMode = false; return _lvs(); };
+
+    // ===== My own songs: pick files from phone -> stored in the private Vault =====
+    (function () {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'audio/*'; inp.multiple = true; inp.style.display = 'none';
+        const b = document.createElement('button');
+        b.textContent = '📂'; b.title = 'Add my songs';
+        b.style.cssText = 'position:fixed;top:calc(8px + env(safe-area-inset-top));right:52px;z-index:50;background:#1b2233;color:#fff;border:0;border-radius:10px;padding:6px 10px;font-size:16px';
+        b.onclick = () => inp.click();
+        inp.onchange = async () => {
+            let n = 0;
+            for (const f of inp.files) {
+                await new Promise(ok => {
+                    const tx = db.transaction('vault', 'readwrite');
+                    tx.objectStore('vault').put({ query: 'local:' + f.name + f.size, title: f.name.replace(/\.[^.]+$/, ''), artist: 'My Music', thumbnail: NOTE, blob: f });
+                    tx.oncomplete = () => { n++; ok(); }; tx.onerror = () => ok();
+                });
+            }
+            inp.value = '';
+            showToast(`✅ ${n} gaane Vault mein add hue`);
+            switchTab('vault');
+        };
+        document.body.appendChild(inp); document.body.appendChild(b);
+    })();
+    (function () {
+        const g = document.createElement('button');
+        g.textContent = '⚙'; g.title = 'Stream nodes';
+        g.style.cssText = 'position:fixed;top:calc(8px + env(safe-area-inset-top));right:8px;z-index:50;background:#1b2233;color:#fff;border:0;border-radius:10px;padding:6px 10px;font-size:16px';
+        g.onclick = () => {
+            const cur = _ls('vw_saavn')[0] || '';
+            const v = prompt('JioSaavn API search URL daalo (khaali = reset).\nExample: https://YOUR-API.vercel.app/api/search/songs?query=', cur);
+            if (v === null) return;
+            localStorage.setItem('vw_saavn', JSON.stringify(v.trim() ? [v.trim()] : []));
+            const jm = prompt('Jamendo client_id (free, devportal.jamendo.com se). Khaali = skip', jamId());
+            if (jm !== null) localStorage.setItem('vw_jamendo', jm.trim());
+            showToast('✅ Saved — app dobara kholo');
+        };
+        document.body.appendChild(g);
+    })();
 </script>
 </body>
 </html>
