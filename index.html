@@ -105,6 +105,12 @@
 
     <div class="vibe-chips" id="vibeChipsBar">
         <div class="chip" onclick="loadFree('', this)">🆓 Free Full Songs</div>
+        <div class="chip" onclick="loadFree('lofi', this)">🌙 Free Lofi</div>
+        <div class="chip" onclick="loadFree('hindi', this)">🇮🇳 Free Hindi</div>
+        <div class="chip" onclick="loadFree('punjabi', this)">🕺 Free Punjabi</div>
+        <div class="chip" onclick="loadFree('bhajan', this)">🙏 Free Bhajan</div>
+        <div class="chip" onclick="loadFree('hip hop', this)">🎤 Free Hip-Hop</div>
+        <div class="chip" onclick="loadFree('chill', this)">😌 Free Chill</div>
         <div class="chip active" onclick="loadVibe('Trending India', this)">🔥 Top 100 Trending</div>
         <div class="chip" onclick="loadVibe('Arijit Singh Hits', this)">❤️ Arijit Unlimited</div>
         <div class="chip" onclick="loadVibe('Bollywood Lofi Chill', this)">🌙 Late Night Lofi</div>
@@ -581,7 +587,7 @@
         return { host: AUDIUS[0], data: [] };
     }
     async function audiusTracks(q) {
-        const { host, data } = await audiusFetch(q ? `/v1/tracks/search?limit=40&query=${encodeURIComponent(q)}` : '/v1/tracks/trending?limit=50');
+        const { host, data } = await audiusFetch(q ? `/v1/tracks/search?limit=40&sort_method=popular&query=${encodeURIComponent(q)}` : '/v1/tracks/trending?limit=50');
         return data.filter(t => t.id).map(t => ({
             title: escH(t.title), artist: escH(t.user?.name), query: 'free:audius:' + t.id,
             thumbnail: t.artwork?.['480x480'] || t.artwork?.['150x150'] || NOTE,
